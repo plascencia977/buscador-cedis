@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de Ubicaciones por Producto</title>
+    <!-- Librería SheetJS para leer archivos Excel directamente en el navegador -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 700px; /* Reduje un poco el ancho ya que hay menos columnas */
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; color: #0056b3; }
+        .form-group {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        input[type="file"] {
+            padding: 10px;
+            border: 1px dashed #0056b3;
+            background: #f9f9f9;
+            width: 100%;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+        .search-box {
+            display: none;
+            margin-top: 30px;
+            text-align: center;
+        }
+        input[type="text"] {
+            width: 70%;
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #004494; }
+        #status { font-weight: bold; color: green; margin-top: 10px; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: center; /* Centré el texto para que se vea más ordenado */
+        }
+        th { background-color: #0056b3; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        .ubicacion-destacada { font-weight: bold; color: #d9534f; font-size: 1.1em; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Buscador de Ubicaciones en CEDIS</h1>
+    
+    <div class="form-group">
+        <label for="excelFile"><strong>1. Carga tu reporte Excel:</strong></label><br><br>
+        <input type="file" id="excelFile" accept=".xlsx, .xls">
+        <div id="status"></div>
+    </div>
+
+    <div class="search-box" id="searchSection">
+        <label for="searchInput"><strong>2. Buscar producto:</strong></label><br><br>
+        <input type="text" id="searchInput" placeholder="Escribe el código SAP o descripción..." onkeyup="checkEnter(event)">
+        <button onclick="buscarProducto()">Buscar</button>
+    </div>
+
+    <table id="resultsTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>Código de Producto</th>
+                <th>Ubicación</th>
+            </tr>
+        </thead>
+        <tbody id="resultsBody">
+            <!-- Los resultados se inyectarán aquí -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let datosExcel = [];
+
+    // Función para leer el archivo Excel
+    document.getElementById('excelFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        document.getElementById('status').innerText = "Procesando archivo, por favor espera...";
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            
+            const primeraHoja = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[primeraHoja];
+            
+            datosExcel = XLSX.utils.sheet_to_json(worksheet);
+            
+            document.getElementById('status').innerText = `Archivo cargado exitosamente. Se leyeron ${datosExcel.length} filas.`;
+            document.getElementById('searchSection').style.display = 'block';
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function checkEnter(event) {
+        if (event.key === "Enter") {
+            buscarProducto();
+        }
+    }
+
+    function buscarProducto() {
+        const query = document.getElementById('searchInput').value.toLowerCase().trim();
+        const tbody = document.getElementById('resultsBody');
+        const tabla = document.getElementById('resultsTable');
+        
+        if (!query) {
+            alert("Por favor, ingresa un código o descripción.");
+            return;
+        }
+
+        // Filtramos la información (sigue permitiendo buscar por descripción internamente)
+        const resultados = datosExcel.filter(fila => {
+            const producto = (fila['Producto'] || '').toString().toLowerCase();
+            const descripcion = (fila['Descripción de producto'] || '').toString().toLowerCase();
+            return producto.includes(query) || descripcion.includes(query);
+        });
+
+        tbody.innerHTML = '';
+        tabla.style.display = 'table';
+
+        if (resultados.length === 0) {
+            // Cambié el colspan a 2 porque ahora solo hay 2 columnas
+            tbody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: red;">No se encontró este producto en ninguna ubicación.</td></tr>';
+            return;
+        }
+
+        // Solo inyectamos Producto y Ubicación
+        resultados.forEach(fila => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${fila['Producto'] || 'N/A'}</td>
+                <td class="ubicacion-destacada">${fila['Ubicación'] || 'Sin Ubicación'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+</script>
+
+</body>
+</html>
